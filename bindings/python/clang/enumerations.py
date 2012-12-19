@@ -31,4 +31,41 @@ TokenKinds = [
     ('COMMENT', 4),
 ]
 
-__all__ = ['TokenKinds']
+# Maps to CXCommentKind.
+CommentKinds = [
+    ('NULL', 0),
+    ('TEXT', 1),
+    ('INLINE_COMMAND', 2),
+    ('HTML_START_TAG', 3),
+    ('HTML_END_TAG', 4),
+    ('PARAGRAPH', 5),
+    ('BLOCK_COMMAND', 6),
+    ('PARAM_COMMAND', 7),
+    ('TPARAM_COMMAND', 8),
+    ('VERBATIM_BLOCK_COMMAND', 9),
+    ('VERBATIM_BLOCK_LINE', 10),
+    ('VERBATIM_LINE', 11),
+    ('FULL_COMMENT', 12),
+]
+
+# Maps to CXCommentInlineCommandRenderKind.
+InlineCommandRenderKinds = [
+    ('NORMAL', 0),
+    ('BOLD', 1),
+    ('MONOSPACED', 2),
+    ('EMPHASIZED', 3),
+]
+
+# Maps to CXCommentParamPassDirection.
+ParamCommandDirections = [
+    ('IN', 0),
+    ('OUT', 1),
+    ('IN_OUT', 2),
+]
+
+__all__ = [
+  'TokenKinds',
+  'CommentKinds',
+  'InlineCommandRenderKinds',
+  'ParamCommandDirections',
+]

@@ -1303,6 +1303,15 @@ class Cursor(Structure):
         """
         return TokenGroup.get_tokens(self._tu, self.extent)
 
+    def get_parsed_comment(self):
+        """If this cursor represents a documentable entity (e.g., declaration),
+        return the associated parsed Comment object.
+
+        If this cursor does not represent a documentable entity, returns
+        a Comment object for which is_null returns True.
+        """
+        return conf.lib.clang_Cursor_getParsedComment(self)
+
     @staticmethod
     def from_result(res, fn, args):
         assert isinstance(res, Cursor)
@@ -1335,6 +1344,464 @@ class Cursor(Structure):
 
         res._tu = args[0]._tu
         return res
+
+### Comment ###
+
+class CommentKind(object):
+    """Describes a specific type of a Comment."""
+
+    _value_map = {} # int -> CommentKind
+
+    def __init__(self, value, name):
+        """Create a new CommentKind instance from a numeric value and a name."""
+        self.value = value
+        self.name = name
+
+    def __repr__(self):
+        return 'CommentKind.%s' % (self.name,)
+
+    def __eq__(self, other):
+        return self.value == other.value
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.value)
+
+    @staticmethod
+    def from_value(value):
+        """Obtain a registered CommentKind instance from its value."""
+        result = CommentKind._value_map.get(value, None)
+
+        if result is None:
+            raise ValueError('Unknown CommentKind: %d' % value)
+
+        return result
+
+    @staticmethod
+    def register(value, name):
+        """Register a new CommentKind enumeration.
+
+        This should only be called at module load time by code within this
+        package.
+        """
+        if value in CommentKind._value_map:
+            raise ValueError('CommentKind already registered: %d' % value)
+
+        kind = CommentKind(value, name)
+        CommentKind._value_map[value] = kind
+        setattr(CommentKind, name, kind)
+
+class InlineCommandRenderKind(object):
+    """Describes a specific type of an inline command rendering mode."""
+
+    _value_map = {} # int -> InlineCommandRenderKind
+
+    def __init__(self, value, name):
+        """Create a new InlineCommandRenderKind instance from a numeric value
+        and a name.
+        """
+        self.value = value
+        self.name = name
+
+    def __repr__(self):
+        return 'InlineCommandRenderKind.%s' % (self.name,)
+
+    def __eq__(self, other):
+        return self.value == other.value
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.value)
+
+    @staticmethod
+    def from_value(value):
+        """Obtain a registered InlineCommandRenderKind instance from its
+        value.
+        """
+        result = InlineCommandRenderKind._value_map.get(value, None)
+
+        if result is None:
+            raise ValueError('Unknown InlineCommandRenderKind: %d' % value)
+
+        return result
+
+    @staticmethod
+    def register(value, name):
+        """Register a new InlineCommandRenderKind enumeration.
+
+        This should only be called at module load time by code within this
+        package.
+        """
+        if value in InlineCommandRenderKind._value_map:
+            raise ValueError('InlineCommandRenderKind already registered: %d' %
+                             value)
+
+        kind = InlineCommandRenderKind(value, name)
+        InlineCommandRenderKind._value_map[value] = kind
+        setattr(InlineCommandRenderKind, name, kind)
+
+class ParamCommandDirection(object):
+    """Describes a specific type of an inline command rendering mode."""
+
+    _value_map = {} # int -> ParamCommandDirection
+
+    def __init__(self, value, name):
+        """Create a new ParamCommandDirection instance from a numeric value
+        and a name.
+        """
+        self.value = value
+        self.name = name
+
+    def __repr__(self):
+        return 'ParamCommandDirection.%s' % (self.name,)
+
+    def __eq__(self, other):
+        return self.value == other.value
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.value)
+
+    @staticmethod
+    def from_value(value):
+        """Obtain a registered ParamCommandDirection instance from its
+        value.
+        """
+        result = ParamCommandDirection._value_map.get(value, None)
+
+        if result is None:
+            raise ValueError('Unknown ParamCommandDirection: %d' % value)
+
+        return result
+
+    @staticmethod
+    def register(value, name):
+        """Register a new ParamCommandDirection enumeration.
+
+        This should only be called at module load time by code within this
+        package.
+        """
+        if value in ParamCommandDirection._value_map:
+            raise ValueError('ParamCommandDirection already registered: %d' %
+                             value)
+
+        kind = ParamCommandDirection(value, name)
+        ParamCommandDirection._value_map[value] = kind
+        setattr(ParamCommandDirection, name, kind)
+
+class Comment(Structure):
+    """
+    The Comment class represents a parsed comment attached to an element within
+    the AST.
+    """
+    _fields_ = [("_ast_node", c_void_p), ("_translation_unit", c_void_p)]
+
+    @property
+    def kind(self):
+        """Return the kind of this comment."""
+        return CommentKind.from_value(conf.lib.clang_Comment_getKind(self))
+
+    def is_null(self):
+        """Return whether the comment is null or not."""
+        return self.kind == CommentKind.NULL
+
+    def __iter__(self):
+        """Return an iterator for accessing the children of this comment."""
+        return self.get_children()
+
+    def __len__(self):
+        """Return the number of children of this comment."""
+        return self.get_num_children()
+
+    def __getitem__(self, key):
+        """Returns the nth child of this comment.  If key is not a non-negative
+        integer or is larger than or equal to get_num_children(), this raises.
+        """
+        return self.get_child_at(key)
+
+    def get_num_children(self):
+        """Returns the number of children of this comment."""
+        return conf.lib.clang_Comment_getNumChildren(self)
+
+    def get_child_at(self, index):
+        """Returns the nth child of this comment.  If index is not a
+        non-negative integer or is larger than or equal to get_num_children(),
+        this raises.
+        """
+        num_children = self.get_num_children()
+        if not isinstance(index, int):
+            raise ValueError('Index ' + str(index) + ' is not an integer')
+        if index < 0 or index >= num_children:
+            raise IndexError('Index ' + str(index) + ' not in range [0, ' +
+                             str(num_children - 1) + ']')
+        return self.__get_child_at(index)
+
+    def __get_child_at(self, index):
+        # We assume the caller has already range and type-checked index.
+        return conf.lib.clang_Comment_getChild(self, index)
+
+    def get_children(self):
+        """Return an iterator for accessing the children of this comment."""
+
+        num_children = len(self)
+        for i in range(num_children):
+            yield self.__get_child_at(i)
+
+    def is_whitespace(self):
+        """Return True if this comment is either empty or contains only
+        whitespace, False otherwise.
+        """
+        return conf.lib.clang_Comment_isWhitespace(self) != 0
+
+    ### CXComment_FullComment methods
+
+    def is_full_comment(self):
+        """Return True if this comment is the top-level (full) comment, False
+        otherwise.
+        """
+        return self.kind == CommentKind.FULL_COMMENT
+
+    def raise_if_not_full_comment(self):
+        """Raise an exception if this comment is not the top-level comment."""
+        if not self.is_full_comment():
+            raise ValueError, 'Comment kind: ' + self.kind + \
+                ' is not a full comment!'
+
+    def get_full_comment_as_html(self):
+        """Convert this comment to an HTML fragment."""
+        self.raise_if_not_full_comment()
+        return conf.lib.clang_FullComment_getAsHTML(self)
+
+    def get_full_comment_as_xml(self):
+        """Convert this comment to an XML document."""
+        self.raise_if_not_full_comment()
+        return conf.lib.clang_FullComment_getAsXML(self)
+
+    ### CXComment_Text methods
+
+    def is_text(self):
+        """Return True if this comment is text, False otherwise."""
+        return self.kind == CommentKind.TEXT
+
+    def get_text(self):
+        """Return the text of this comment. If this comment is not text,
+        this raises.
+        """
+        if not self.is_text():
+            raise ValueError, 'Comment kind: ' + self.kind + ' is not text!'
+        return conf.lib.clang_TextComment_getText(self)
+
+    ### CXComment_InlineCommand methods
+
+    def is_inline_command(self):
+        """Return True if this comment is an inline command, False
+        otherwise.
+        """
+        return self.kind == CommentKind.INLINE_COMMAND
+
+    def raise_if_not_inline_command(self):
+        """Raise an exception if this comment is not an inline command."""
+        if not self.is_inline_command():
+            raise ValueError, \
+                'Comment kind: ' + self.kind + ' is not an inline command!'
+
+    def get_inline_command_name(self):
+        """Return the name of this inline command. If this comment is not an
+        inline command, this raises.
+        """
+        self.raise_if_not_inline_command()
+        return conf.lib.clang_InlineCommandComment_getCommandName(self)
+
+    def get_inline_command_render_kind(self):
+        """Return a RenderKind describing how this inline command should
+        be rendered. If this comment is not an inline command, this raises.
+        """
+        self.raise_if_not_inline_command()
+        return RenderKind.from_value(
+            conf.lib.clang_InlineCommandComment_getRenderKind(self))
+
+    def get_inline_command_args(self):
+        """Return an iterator for accessing the argument strings of this
+        inline command. If this comment is not an inline command, this raises.
+        """
+        self.raise_if_not_inline_command()
+        num_args = conf.lib.clang_InlineCommandComment_getNumArgs(self)
+        for i in range(num_args):
+            yield conf.lib.clang_InlineCommandComment_getArgText(self, i)
+
+    ### CXComment_ParamCommand methods
+
+    def is_param_command(self):
+        """Return True if this comment is a parameter command, False
+        otherwise.
+        """
+        return self.kind == CommentKind.PARAM_COMMAND
+
+    def raise_if_not_param_command(self):
+        """Raise an exception if this comment is not an parameter command."""
+        if not self.is_param_command():
+            raise ValueError, \
+                'Comment kind: ' + self.kind + ' is not a param command!'
+
+    def get_param_command_name(self):
+        """Return the name of the parameter command. If this comment is not
+        a parameter command, this raises."""
+        self.raise_if_not_param_command()
+        return conf.lib.clang_ParamCommandComment_getParamName(self)
+
+    def get_param_command_direction(self):
+        """Return a ParamCommandDirection describing the direction this
+        parameter command is passed. If this comment is not a parameter command,
+        this raises.
+        """
+        self.raise_if_not_param_command()
+        return ParamCommandDirection.from_value(
+            conf.lib.clang_ParamCommandComment_getDirection(self))
+
+    def is_param_command_direction_explicit(self):
+        """Return True if this comment specifies the direction this
+        parameter command is passed, otherwise return False. If this comment
+        is not a parameter command, this raises.
+        """
+        self.raise_if_not_param_command()
+        return conf.lib.clang_ParamCommandComment_isDirectionExplicit(self) != 0
+
+    def is_param_command_index_valid(self):
+        """Return True if the parameter this comment represents was found in
+        the function prototype, False otherwise. If this comment is not a
+        parameter command, this raises.
+
+        If this returns True, then get_param_command_index() will return a
+        meaningful value.
+        """
+        self.raise_if_not_param_command()
+        return conf.lib.clang_ParamCommandComment_isParamIndexValid(self) != 0
+
+    def get_param_command_index(self):
+        """Return the zero-based index of the parameter this comment represents
+        in the function prototype. If this comment is not a parameter command,
+        this raises.
+
+        Only returns a meaningful value if
+        is_param_command_index_valid() returns True.
+        """
+        self.raise_if_not_param_command()
+        return conf.lib.clang_ParamCommandComment_getParamIndex(self)
+
+    ### CXComment_TParamCommand methods
+
+    def is_template_param_command(self):
+        """Return True if this comment is a template parameter command, False
+        otherwise.
+        """
+        return self.kind == CommentKind.TPARAM_COMMAND
+
+    def raise_if_not_template_param_command(self):
+        """Raise an exception if this comment is not a template
+        parameter command.
+        """
+        if not self.is_template_param_command():
+          raise ValueError, \
+            'Comment kind: ' + self.kind + ' is not a template param command!'
+
+    def get_template_param_command_name(self):
+        """Return the name of the template parameter command. If this
+        comment is not a template parameter command, this raises.
+        """
+        self.raise_if_not_template_param_command()
+        return conf.lib.clang_TParamCommandComment_getParamName(self)
+
+    def is_template_param_command_position_valid(self):
+        """Return True if the template parameter this comment has a
+        valid position in the function prototype, False otherwise. If
+        this comment is not a template parameter command, this raises.
+        """
+        self.raise_if_not_template_param_command()
+        return conf.lib.clang_TParamCommandComment_isParamPositionValid(self) \
+            != 0
+
+    def get_template_param_command_depth(self):
+        """Return the zero-based depth of the template parameter this
+        comment represents in the function prototype. If this comment
+        is not a template parameter command, this raises.
+        """
+        self.raise_if_not_template_param_command()
+        return conf.lib.clang_TParamCommandComment_getDepth(self)
+
+    def get_template_param_command_index(self, depth):
+        """Return the zero-based index of the template parameter this
+        comment represents in the function prototype, given a nesting
+        depth. If this comment is not a template parameter command,
+        this raises.
+
+        Only returns a meaningful value if
+        is_template_param_command_position_valid() returns True.
+        """
+        self.raise_if_not_template_param_command()
+        return conf.lib.clang_TParamCommandComment_getIndex(self, depth)
+
+    ### CXComment_BlockCommand methods
+
+    def is_block_command(self):
+        """Return True if this comment is a block command, False otherwise."""
+        return self.kind == CommentKind.BLOCK_COMMAND
+
+    def raise_if_not_block_command(self):
+        """Raise an exception if this comment is not a block command."""
+        if not self.is_block_command():
+            raise ValueError, \
+                'Comment kind: ' + self.kind + ' is not a block command!'
+
+    def get_block_command_name(self):
+        """Return the name of the block command. If this comment is not a
+        block command, this raises.
+        """
+        self.raise_if_not_block_command()
+        return conf.lib.clang_BlockCommandComment_getCommandName(self)
+
+    def get_block_command_args(self):
+        """Return an iterator over the argument strings passed to this
+        block command. If this comment is not a block command, this
+        raises.
+        """
+        self.raise_if_not_block_command()
+        num_args = conf.lib.clang_BlockCommandComment_getNumArgs(self)
+        for i in range(num_args):
+            yield conf.lib.clang_BlockCommandComment_getArgText(self, i)
+
+    def get_block_command_paragraph(self):
+        """Return the comment paragraph associated with this block command.
+        If this comment is not a block command, this raises.
+        """
+        self.raise_if_not_block_command()
+        return conf.lib.clang_BlockCommandComment_getParagraph(self)
+
+    def __repr__(self):
+        repr = "<Comment %s>" % (self.kind,)
+        if self.is_text():
+            repr += " " + self.get_text()
+        elif self.is_inline_command():
+            repr += " " + self.get_inline_command_name()
+            for arg in self.get_inline_command_args():
+                repr += " param " + i + ": " + arg
+        elif self.is_param_command():
+            repr += " " + self.get_param_command_name() + " (index "
+            if self.is_param_command_index_valid():
+                repr += self.get_param_command_index()
+            else:
+                repr += "invalid"
+            repr += ")"
+        elif self.is_block_command():
+            repr += " " + self.get_block_command_name()
+            for arg in self.get_block_command_args():
+                repr += " param " + i + ": " + arg
+        return repr
 
 ### Type Kinds ###
 
@@ -2988,6 +3455,116 @@ functionList = [
    [Cursor, c_uint],
    Cursor,
    Cursor.from_result),
+
+  ("clang_Cursor_getParsedComment",
+   [Cursor],
+   Comment),
+
+  ("clang_Comment_getKind",
+   [Comment],
+   c_uint),
+
+  ("clang_Comment_getNumChildren",
+   [Comment],
+   c_uint),
+
+  ("clang_Comment_getChild",
+   [Comment, c_uint],
+   Comment),
+
+  ("clang_Comment_isWhitespace",
+   [Comment],
+   c_uint),
+
+  ("clang_TextComment_getText",
+   [Comment],
+   _CXString,
+   _CXString.from_result),
+
+  ("clang_ParamCommandComment_getParamName",
+   [Comment],
+   _CXString,
+   _CXString.from_result),
+
+  ("clang_ParamCommandComment_isParamIndexValid",
+   [Comment],
+   c_uint),
+
+  ("clang_ParamCommandComment_getParamIndex",
+   [Comment],
+   c_uint),
+
+  ("clang_ParamCommandComment_isDirectionExplicit",
+   [Comment],
+   c_uint),
+
+  ("clang_ParamCommandComment_getDirection",
+   [Comment],
+   c_uint),
+
+  ("clang_TParamCommandComment_getParamName",
+   [Comment],
+   _CXString,
+   _CXString.from_result),
+
+  ("clang_TParamCommandComment_isParamPositionValid",
+   [Comment],
+   c_uint),
+
+  ("clang_TParamCommandComment_getDepth",
+   [Comment],
+   c_uint),
+
+  ("clang_TParamCommandComment_getIndex",
+   [Comment, c_uint],
+   c_uint),
+
+  ("clang_BlockCommandComment_getCommandName",
+   [Comment],
+   _CXString,
+   _CXString.from_result),
+
+  ("clang_BlockCommandComment_getNumArgs",
+   [Comment],
+   c_uint),
+
+  ("clang_BlockCommandComment_getParagraph",
+   [Comment],
+   Comment),
+
+  ("clang_BlockCommandComment_getArgText",
+   [Comment, c_uint],
+   _CXString,
+   _CXString.from_result),
+
+  ("clang_InlineCommandComment_getCommandName",
+   [Comment],
+   _CXString,
+   _CXString.from_result),
+
+  ("clang_InlineCommandComment_getRenderKind",
+   [Comment],
+   c_uint),
+
+  ("clang_InlineCommandComment_getNumArgs",
+   [Comment],
+   c_uint),
+
+  ("clang_InlineCommandComment_getArgText",
+   [Comment, c_uint],
+   _CXString,
+   _CXString.from_result),
+
+  ("clang_FullComment_getAsHTML",
+   [Comment],
+   _CXString,
+   _CXString.from_result),
+
+  ("clang_FullComment_getAsXML",
+   [Comment],
+   _CXString,
+   _CXString.from_result),
+
 ]
 
 class LibclangError(Exception):
@@ -3126,6 +3703,12 @@ class Config:
 def register_enumerations():
     for name, value in clang.enumerations.TokenKinds:
         TokenKind.register(value, name)
+    for name, value in clang.enumerations.CommentKinds:
+        CommentKind.register(value, name)
+    for name, value in clang.enumerations.InlineCommandRenderKinds:
+        InlineCommandRenderKind.register(value, name)
+    for name, value in clang.enumerations.ParamCommandDirections:
+        ParamCommandDirection.register(value, name)
 
 conf = Config()
 register_enumerations()
