@@ -2536,6 +2536,23 @@ clang_createTranslationUnitFromSourceFile(CXIndex CIdx,
                                     Options);
 }
 
+CXTranslationUnit
+clang_createTranslationUnitFromSourceFileWithCommentCommands(CXIndex CIdx,
+                                          const char *source_filename,
+                                          int num_command_line_args,
+                                          const char * const *command_line_args,
+                                          unsigned num_unsaved_files,
+                                          struct CXUnsavedFile *unsaved_files,
+                                          int num_comment_commands,
+                                         const char * const *comment_commands) {
+  unsigned Options = CXTranslationUnit_DetailedPreprocessingRecord;
+  return clang_parseTranslationUnitWithCommentCommands(CIdx, source_filename,
+                                    command_line_args, num_command_line_args,
+                                    unsaved_files, num_unsaved_files,
+                                    Options,
+                                    num_comment_commands, comment_commands);
+}
+
 struct ParseTranslationUnitInfo {
   CXIndex CIdx;
   const char *source_filename;
@@ -2545,7 +2562,10 @@ struct ParseTranslationUnitInfo {
   unsigned num_unsaved_files;
   unsigned options;
   CXTranslationUnit result;
+  int num_comment_commands;
+  const char *const *comment_commands;
 };
+
 static void clang_parseTranslationUnit_Impl(void *UserData) {
   ParseTranslationUnitInfo *PTUI =
     static_cast<ParseTranslationUnitInfo*>(UserData);
@@ -2560,6 +2580,11 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
 
   if (!CIdx)
     return;
+
+  std::vector<std::string> CommentCommands;
+  for (int I = 0; I < PTUI->num_comment_commands; ++I) {
+    CommentCommands.push_back(PTUI->comment_commands[I]);
+  }
 
   CIndexer *CXXIdx = static_cast<CIndexer *>(CIdx);
 
@@ -2664,7 +2689,8 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
                                  SkipFunctionBodies,
                                  /*UserFilesAreVolatile=*/true,
                                  ForSerialization,
-                                 &ErrUnit));
+                                 &ErrUnit,
+                                 CommentCommands));
 
   if (NumErrors != Diags->getClient()->getNumErrors()) {
     // Make sure to check that 'Unit' is non-NULL.
@@ -2674,6 +2700,10 @@ static void clang_parseTranslationUnit_Impl(void *UserData) {
 
   PTUI->result = MakeCXTranslationUnit(CXXIdx, Unit.take());
 }
+
+static CXTranslationUnit clang_parseTranslationUnit_Safely_Impl(
+  ParseTranslationUnitInfo* PTUI);
+
 CXTranslationUnit clang_parseTranslationUnit(CXIndex CIdx,
                                              const char *source_filename,
                                          const char * const *command_line_args,
@@ -2683,36 +2713,64 @@ CXTranslationUnit clang_parseTranslationUnit(CXIndex CIdx,
                                              unsigned options) {
   ParseTranslationUnitInfo PTUI = { CIdx, source_filename, command_line_args,
                                     num_command_line_args, unsaved_files,
-                                    num_unsaved_files, options, 0 };
+                                    num_unsaved_files, options, 0, 0, 0 };
+  return clang_parseTranslationUnit_Safely_Impl(&PTUI);
+}
+
+CXTranslationUnit clang_parseTranslationUnitWithCommentCommands(CXIndex CIdx,
+                                             const char *source_filename,
+                                         const char * const *command_line_args,
+                                             int num_command_line_args,
+                                            struct CXUnsavedFile *unsaved_files,
+                                             unsigned num_unsaved_files,
+                                                       unsigned options,
+                                                       int num_comment_commands,
+                                        const char * const *comment_commands) {
+  ParseTranslationUnitInfo PTUI = { CIdx, source_filename, command_line_args,
+                                    num_command_line_args, unsaved_files,
+                                    num_unsaved_files, options, 0,
+                                    num_comment_commands, comment_commands };
+  return clang_parseTranslationUnit_Safely_Impl(&PTUI);
+}
+
+static CXTranslationUnit clang_parseTranslationUnit_Safely_Impl(
+  ParseTranslationUnitInfo* PTUI) {
   llvm::CrashRecoveryContext CRC;
 
-  if (!RunSafely(CRC, clang_parseTranslationUnit_Impl, &PTUI)) {
+  if (!RunSafely(CRC, clang_parseTranslationUnit_Impl, PTUI)) {
     fprintf(stderr, "libclang: crash detected during parsing: {\n");
-    fprintf(stderr, "  'source_filename' : '%s'\n", source_filename);
+    fprintf(stderr, "  'source_filename' : '%s'\n", PTUI->source_filename);
     fprintf(stderr, "  'command_line_args' : [");
-    for (int i = 0; i != num_command_line_args; ++i) {
+    for (int i = 0; i != PTUI->num_command_line_args; ++i) {
       if (i)
         fprintf(stderr, ", ");
-      fprintf(stderr, "'%s'", command_line_args[i]);
+      fprintf(stderr, "'%s'", PTUI->command_line_args[i]);
     }
     fprintf(stderr, "],\n");
     fprintf(stderr, "  'unsaved_files' : [");
-    for (unsigned i = 0; i != num_unsaved_files; ++i) {
+    for (unsigned i = 0; i != PTUI->num_unsaved_files; ++i) {
       if (i)
         fprintf(stderr, ", ");
-      fprintf(stderr, "('%s', '...', %ld)", unsaved_files[i].Filename,
-              unsaved_files[i].Length);
+      fprintf(stderr, "('%s', '...', %ld)", PTUI->unsaved_files[i].Filename,
+              PTUI->unsaved_files[i].Length);
     }
     fprintf(stderr, "],\n");
-    fprintf(stderr, "  'options' : %d,\n", options);
+    fprintf(stderr, "  'options' : %d,\n", PTUI->options);
+    fprintf(stderr, "  'comment_commands' : [");
+    for (int i = 0; i != PTUI->num_comment_commands; ++i) {
+      if (i)
+        fprintf(stderr, ", ");
+      fprintf(stderr, "'%s'", PTUI->comment_commands[i]);
+    }
+    fprintf(stderr, "],\n");
     fprintf(stderr, "}\n");
     
     return 0;
   } else if (getenv("LIBCLANG_RESOURCE_USAGE")) {
-    PrintLibclangResourceUsage(PTUI.result);
+    PrintLibclangResourceUsage(PTUI->result);
   }
   
-  return PTUI.result;
+  return PTUI->result;
 }
 
 unsigned clang_defaultSaveOptions(CXTranslationUnit TU) {

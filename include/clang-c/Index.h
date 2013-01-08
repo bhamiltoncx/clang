@@ -1022,6 +1022,16 @@ CINDEX_LINKAGE CXTranslationUnit clang_createTranslationUnitFromSourceFile(
                                          unsigned num_unsaved_files,
                                          struct CXUnsavedFile *unsaved_files);
 
+CINDEX_LINKAGE CXTranslationUnit clang_createTranslationUnitFromSourceFileWithCommentCommands(
+                                        CXIndex CIdx,
+                                        const char *source_filename,
+                                        int num_clang_command_line_args,
+                                  const char * const *clang_command_line_args,
+                                        unsigned num_unsaved_files,
+                                        struct CXUnsavedFile *unsaved_files,
+                                        int num_comment_commands,
+                                        const char * const *comment_commands);
+
 /**
  * \brief Create a translation unit from an AST file (-emit-ast).
  */
@@ -1190,6 +1200,17 @@ CINDEX_LINKAGE CXTranslationUnit clang_parseTranslationUnit(CXIndex CIdx,
                                             struct CXUnsavedFile *unsaved_files,
                                                      unsigned num_unsaved_files,
                                                             unsigned options);
+
+CINDEX_LINKAGE CXTranslationUnit clang_parseTranslationUnitWithCommentCommands(
+                                                                   CXIndex CIdx,
+                                                    const char *source_filename,
+                                          const char * const *command_line_args,
+                                                      int num_command_line_args,
+                                            struct CXUnsavedFile *unsaved_files,
+                                                     unsigned num_unsaved_files,
+                                                               unsigned options,
+                                                               int num_comments,
+                                          const char * const *comment_commands);
   
 /**
  * \brief Flags that control how translation units are saved.
