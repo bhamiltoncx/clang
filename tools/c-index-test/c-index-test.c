@@ -192,7 +192,7 @@ int parse_remapped_files(int argc, const char **argv, int start_arg,
   return 0;
 }
 
-static const char *parse_comments_schema(int argc, const char **argv) {
+ static const char *parse_comments_schema(int argc, const char **argv) {
   const char *CommentsSchemaArg = "-comments-xml-schema=";
   const char *CommentSchemaFile = NULL;
 
@@ -203,6 +203,48 @@ static const char *parse_comments_schema(int argc, const char **argv) {
     CommentSchemaFile = argv[0] + strlen(CommentsSchemaArg);
 
   return CommentSchemaFile;
+}
+
+static int parse_comment_commands(
+  int argc, const char **argv,
+  int *num_comment_commands_out,
+  char ***comment_commands_out) {
+  const char *CommentCommandsArg = "-comment-commands=";
+  const char *Sep = ",";
+  int num_comment_commands = 0;
+  size_t next_offset;
+  char **comment_commands;
+  const char *commands_start;
+  const char *commands_end;
+
+  if (argc == 0)
+    return -1;
+
+  if (strncmp(argv[0], CommentCommandsArg, strlen(CommentCommandsArg)) != 0)
+    return -1;
+
+  commands_start = argv[0] + strlen(CommentCommandsArg);
+  commands_end = argv[0] + strlen(argv[0]);
+
+  if (commands_start == commands_end)
+    return -1;
+
+  comment_commands = (char **)malloc(sizeof (char *) * 16);
+  while (1) {
+    next_offset = strcspn(commands_start, Sep);
+    comment_commands[num_comment_commands] =
+      strndup(commands_start, next_offset);
+    num_comment_commands++;
+    commands_start += next_offset + 1;
+    if (commands_start >= commands_end) {
+      break;
+    }
+  }
+
+  *num_comment_commands_out = num_comment_commands;
+  *comment_commands_out = comment_commands;
+
+  return 0;
 }
 
 /******************************************************************************/
@@ -1248,6 +1290,9 @@ int perform_test_load_source(int argc, const char **argv,
   struct CXUnsavedFile *unsaved_files = 0;
   int num_unsaved_files = 0;
   int result;
+  int num_comment_commands = 0;
+  int i;
+  char **comment_commands = NULL;
   
   Idx = clang_createIndex(/* excludeDeclsFromPCH */
                           (!strcmp(filter, "local") || 
@@ -1259,16 +1304,29 @@ int perform_test_load_source(int argc, const char **argv,
     argv++;
   }
 
+  if (parse_comment_commands(argc, argv,
+                             &num_comment_commands, &comment_commands) == 0) {
+    argc--;
+    argv++;
+  }
+
   if (parse_remapped_files(argc, argv, 0, &unsaved_files, &num_unsaved_files)) {
     clang_disposeIndex(Idx);
     return -1;
   }
 
-  TU = clang_parseTranslationUnit(Idx, 0,
+  TU = clang_parseTranslationUnitWithCommentCommands(Idx, 0,
                                   argv + num_unsaved_files,
                                   argc - num_unsaved_files,
                                   unsaved_files, num_unsaved_files, 
-                                  getDefaultParsingOptions());
+                                  getDefaultParsingOptions(),
+                                  num_comment_commands,
+                                  (const char * const *)comment_commands);
+  for (i = 0; i < num_comment_commands; i++) {
+    free(comment_commands[i]);
+  }
+  free(comment_commands);
+
   if (!TU) {
     fprintf(stderr, "Unable to load translation unit!\n");
     free_remapped_files(unsaved_files, num_unsaved_files);
