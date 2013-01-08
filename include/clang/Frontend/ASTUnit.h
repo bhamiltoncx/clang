@@ -721,7 +721,10 @@ public:
                                        bool CacheCodeCompletionResults = false,
                               bool IncludeBriefCommentsInCodeCompletion = false,
                                        bool UserFilesAreVolatile = false,
-                                       OwningPtr<ASTUnit> *ErrAST = 0);
+                                                 OwningPtr<ASTUnit> *ErrAST = 0,
+                                      const std::vector<std::string>&
+                                 CommentCommands = std::vector<std::string>());
+
 
   /// LoadFromCompilerInvocation - Create an ASTUnit from a source file, via a
   /// CompilerInvocation object.
@@ -742,7 +745,10 @@ public:
                                       TranslationUnitKind TUKind = TU_Complete,
                                        bool CacheCodeCompletionResults = false,
                             bool IncludeBriefCommentsInCodeCompletion = false,
-                                             bool UserFilesAreVolatile = false);
+                                             bool UserFilesAreVolatile = false,
+                                      const std::vector<std::string>&
+                                 CommentCommands = std::vector<std::string>());
+
 
   /// LoadFromCommandLine - Create an ASTUnit from a vector of command line
   /// arguments, which must specify exactly one source file.
@@ -779,7 +785,9 @@ public:
                                       bool SkipFunctionBodies = false,
                                       bool UserFilesAreVolatile = false,
                                       bool ForSerialization = false,
-                                      OwningPtr<ASTUnit> *ErrAST = 0);
+                                      OwningPtr<ASTUnit> *ErrAST = 0,
+                                      const std::vector<std::string>&
+                                  CommentCommands = std::vector<std::string>());
   
   /// \brief Reparse the source files using the same command-line options that
   /// were originally used to produce this translation unit.

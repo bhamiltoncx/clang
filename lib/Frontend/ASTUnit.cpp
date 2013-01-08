@@ -163,6 +163,16 @@ static const std::string &getPreambleFile(const ASTUnit *AU) {
   return getOnDiskData(AU).PreambleFile;  
 }
 
+static void RegisterCommentCommands(
+  const std::vector<std::string>& CommentCommands,
+  clang::comments::CommandTraits& CommandTraits) {
+  for (std::vector<std::string>::const_iterator i = CommentCommands.begin();
+       i != CommentCommands.end();
+       i++) {
+    CommandTraits.registerUnknownCommand(*i);
+  }
+}
+
 void OnDiskData::CleanTemporaryFiles() {
   for (unsigned I = 0, N = TemporaryFiles.size(); I != N; ++I)
     TemporaryFiles[I].eraseFromDisk();
@@ -1722,7 +1732,9 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(CompilerInvocation *CI,
                                              bool CacheCodeCompletionResults,
                                     bool IncludeBriefCommentsInCodeCompletion,
                                              bool UserFilesAreVolatile,
-                                             OwningPtr<ASTUnit> *ErrAST) {
+                                                  OwningPtr<ASTUnit> *ErrAST,
+                              const std::vector<std::string>& CommentCommands) {
+
   assert(CI && "A CompilerInvocation is required");
 
   OwningPtr<ASTUnit> OwnAST;
@@ -1745,6 +1757,10 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocationAction(CompilerInvocation *CI,
   AST->ShouldCacheCodeCompletionResults = CacheCodeCompletionResults;
   AST->IncludeBriefCommentsInCodeCompletion
     = IncludeBriefCommentsInCodeCompletion;
+
+  // XXX (bgertzfield/dmitri): This assert always fails.
+  assert(AST->Ctx && "A Context is required");
+  RegisterCommentCommands(CommentCommands, AST->Ctx->getCommentCommandTraits());
 
   // Recover resources if we crash before exiting this method.
   llvm::CrashRecoveryContextCleanupRegistrar<ASTUnit>
@@ -1886,7 +1902,9 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocation(CompilerInvocation *CI,
                                              TranslationUnitKind TUKind,
                                              bool CacheCodeCompletionResults,
                                     bool IncludeBriefCommentsInCodeCompletion,
-                                             bool UserFilesAreVolatile) {
+                                             bool UserFilesAreVolatile,
+                              const std::vector<std::string>& CommentCommands) {
+
   // Create the AST unit.
   OwningPtr<ASTUnit> AST;
   AST.reset(new ASTUnit(false));
@@ -1900,6 +1918,10 @@ ASTUnit *ASTUnit::LoadFromCompilerInvocation(CompilerInvocation *CI,
     = IncludeBriefCommentsInCodeCompletion;
   AST->Invocation = CI;
   AST->UserFilesAreVolatile = UserFilesAreVolatile;
+
+  // XXX (bgertzfield/dmitri): This assert always fails.
+  assert(AST->Ctx && "A Context is required");
+  RegisterCommentCommands(CommentCommands, AST->Ctx->getCommentCommandTraits());
   
   // Recover resources if we crash before exiting this method.
   llvm::CrashRecoveryContextCleanupRegistrar<ASTUnit>
@@ -1928,7 +1950,8 @@ ASTUnit *ASTUnit::LoadFromCommandLine(const char **ArgBegin,
                                       bool SkipFunctionBodies,
                                       bool UserFilesAreVolatile,
                                       bool ForSerialization,
-                                      OwningPtr<ASTUnit> *ErrAST) {
+                                      OwningPtr<ASTUnit> *ErrAST,
+                              const std::vector<std::string>& CommentCommands) {
   if (!Diags.getPtr()) {
     // No diagnostics engine was provided, so create our own diagnostics object
     // with the default options.
@@ -1991,6 +2014,11 @@ ASTUnit *ASTUnit::LoadFromCommandLine(const char **ArgBegin,
   AST->NumStoredDiagnosticsFromDriver = StoredDiagnostics.size();
   AST->StoredDiagnostics.swap(StoredDiagnostics);
   AST->Invocation = CI;
+
+  // XXX (bgertzfield/dmitri): This assert always fails.
+  assert(AST->Ctx && "A Context is required");
+  RegisterCommentCommands(CommentCommands, AST->Ctx->getCommentCommandTraits());
+
   if (ForSerialization)
     AST->WriterData.reset(new ASTWriterData());
   CI = 0; // Zero out now to ease cleanup during crash recovery.
